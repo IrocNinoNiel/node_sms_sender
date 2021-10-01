@@ -6,13 +6,10 @@ const socketio = require('socket.io');
 // ClickSend API //
 var api = require('./node_modules/clicksend/api.js');
 var smsMessage = new api.SmsMessage();
-// ClickSend API //
 
-// const vonage = new Vonage({
-//     apiKey: "fee6ed49",
-//     apiSecret: "Yp6OORMFuZRs1wJs"
-// }, {debug: true});
-
+// Serial port gsm
+const serialportgsm = require('serialport-gsm')
+const modem = serialportgsm.Modem()
 
 const app = express();
 
@@ -60,36 +57,60 @@ app.get('/', (req,res) => {
 // })
 
 
-// Catch Form submit (ClickSend)
+// Catch Form submit (ClickSend) Send using gsm module
+
+const options = {
+    baudRate: 9600,
+    dataBits: 8,
+    stopBits: 1,
+    parity: 'none',
+    rtscts: false,
+    xon: false,
+    xoff: false,
+    xany: false,
+    autoDeleteOnReceive: false,
+    enableConcatenation: true,
+    incomingCallIndication: true,
+    incomingSMSIndication: true,
+    pin: '',
+    customInitCommand: '',
+    logger: console
+}
+
+modem.open('COM4', options, (data)=>{console.log(data)});
+modem.on('open', data => {	
+    console.log(data);
+
+    // Initialize the modem
+// 639546282971
+})
+
+
 app.post('/',(req,res) => {
-    // res.send(req.body);
+    modem.initializeModem((data)=>{
+        console.log('Modem is Initialized');
+        
+        const to = req.body.number;
+        const text = req.body.text;
+        // Send Messages
+        modem.sendSMS(to, text, false, (data)=>{
+            console.log(data);
+        })
+
+    })
+    // const to = req.body.number;
     // const text = req.body.text;
+    // // Send Messages
+    // modem.sendSMS(to, text, false, (data)=>{
+    //     console.log(data);
+    // })
+	
+
+    modem.on('onSendingMessage', result => { 
+        console.log(result);
+     })
+
     
-
-    smsMessage.from = "myNumber";
-    smsMessage.to = "+639953856593";
-    smsMessage.body = "test message";
-
-    var smsApi = new api.SMSApi("useriroc123", "EA7F77EE-D258-EBA0-5B61-C374180BE13E");
-
-    var smsCollection = new api.SmsMessageCollection();
-
-    smsCollection.messages = [smsMessage];
-
-    smsApi.smsSendPost(smsCollection).then(function(response) {
-        console.log(response.body);
-    }).catch(function(err){
-        console.error(err.body);
-    });
-
-
-    // // User Info
-    // var accountApi = new api.AccountApi("useriroc123", "EA7F77EE-D258-EBA0-5B61-C374180BE13E");
-    // accountApi.accountGet().then(function(response) {
-    //     console.log(response.body);
-    //   }).catch(function(err){
-    //     console.error(err.body);
-    //   });
 })
 
 
@@ -107,3 +128,20 @@ io.on('connection',(socket) => {
         console.log('Socket Disconnected')
     })
 });
+
+// // On Recieving new Message
+// modem.open('COM4', options, (data)=>{console.log('aa')});
+modem.on('onNewMessage', messageDetails => {
+    console.log(messageDetails)
+    console.log(messageDetails.sender);
+
+    // Replying to message when recieve a new message
+    modem.initializeModem((data)=>{
+        console.log('Modem is Initialized');
+    
+        modem.sendSMS(messageDetails.sender, `Is this your message? ${messageDetails.message}`, false, (data)=>{
+            console.log(data);
+        })
+
+    })
+})
